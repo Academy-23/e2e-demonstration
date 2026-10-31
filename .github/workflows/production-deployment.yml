@@ -16,7 +16,7 @@ jobs:
       url: ${{ vars.SITE_URL }}
     env:
       H: mentoracademy23p@${{ secrets.DEPLOY_HOST }}
-      DOCROOT: ~/laragenie/public
+      DOCROOT: /var/www/clients/client8/web30/web/laragenie/public
       SRC: ./            # plain site: deploy the repo files as they are (Next.js: out/)
     steps:
       - uses: actions/checkout@v4
