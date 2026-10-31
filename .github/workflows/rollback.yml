@@ -55,3 +55,19 @@ jobs:
         run: |
           curl -fsS "${{ vars.SITE_URL }}/version.json" | grep -q "$SHA"
           curl -fsS -o /dev/null -w "%{http_code}\n" "${{ vars.SITE_URL }}/"
+
+      - name: Report to Uptime Kuma
+        # Push monitor: up on success, down on failure. Skipped if the secret is
+        # not set; never fails the rollback if Kuma is unreachable.
+        if: always()
+        env:
+          KUMA: ${{ secrets.KUMA_DEPLOY_PUSH_URL }}
+          STATUS: ${{ job.status }}
+        run: |
+          [ -n "$KUMA" ] || { echo "KUMA_DEPLOY_PUSH_URL not set - skipping"; exit 0; }
+          KUMA="${KUMA%%\?*}"   # drop default ?status=up&msg=OK&ping= from the copied URL
+          if [ "$STATUS" = "success" ]; then S=up; else S=down; fi
+          curl -fsS -m 10 -G "$KUMA" \
+            --data-urlencode "status=$S" \
+            --data-urlencode "msg=rollback to ${RELEASE:-previous} ${SHA:0:7} $STATUS (run $GITHUB_RUN_ID)" \
+            -o /dev/null && echo "reported: $S" || echo "::warning::could not reach Uptime Kuma"
