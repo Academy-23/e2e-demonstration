@@ -10,26 +10,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npm run lint
+      # --- Not needed for a plain HTML/CSS/JS site (no package.json). Re-enable for Next.js. ---
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 20, cache: npm }
+      # - run: npm ci
+      # - run: npm run lint
+      - run: npx --yes html-validate "**/*.html"          # HTML validation (node is preinstalled on the runner)
 
   typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npx tsc --noEmit
+      # --- TypeScript only. Re-enable when the project has tsconfig.json. ---
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 20, cache: npm }
+      # - run: npm ci
+      # - run: npx tsc --noEmit
+      - run: echo "No TypeScript in this project - typecheck skipped"
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
-      - run: npm ci
-      - run: npm run build
-      - run: test -f out/index.html   # proves the static export was produced
+      # --- Next.js build. Re-enable when the project has package.json and next.config.* ---
+      # - uses: actions/setup-node@v4
+      #   with: { node-version: 20, cache: npm }
+      # - run: npm ci
+      # - run: npm run build
+      # - run: test -f out/index.html   # proves the static export was produced
+      - run: test -f index.html          # plain site: the entry page must exist at the repo root
+      - run: '! grep -rIl "localhost" --include=*.html --include=*.js . || (echo "localhost reference found" && exit 1)'
