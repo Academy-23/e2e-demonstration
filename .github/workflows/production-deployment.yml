@@ -17,24 +17,27 @@ jobs:
     env:
       H: mentoracademy23p@${{ secrets.DEPLOY_HOST }}
       DOCROOT: ~/laragenie/public
+      SRC: ./            # plain site: deploy the repo files as they are (Next.js: out/)
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Build static export
-        run: |
-          npm ci
-          npm run build                      # next.config: output: 'export' → out/
-          test -f out/index.html
+      # --- Next.js only: re-enable when the project has package.json / next.config.* ---
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: 20
+      #     cache: npm
+      # - name: Build static export
+      #   run: |
+      #     npm ci
+      #     npm run build                      # next.config: output: 'export' → out/
+      #     test -f out/index.html
 
       - name: Version stamp
         run: |
-          echo "V=$(node -p "require('./package.json').version")-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -Is)" > out/version.json
+          echo "V=$(date +%Y%m%d-%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          # Next.js: V=$(node -p "require('./package.json').version")-${GITHUB_SHA::7}
+          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -Is)" > version.json
+          test -f index.html
 
       - name: SSH setup
         run: |
@@ -46,11 +49,11 @@ jobs:
       - name: Upload to a new release directory
         run: |
           ssh "$H" "mkdir -p ~/deploy/releases/$V"
-          rsync -az --delete out/ "$H:deploy/releases/$V/"
+          rsync -az --delete --exclude='.git' --exclude='.github' --exclude='README.md' "$SRC" "$H:deploy/releases/$V/"
 
       - name: Backup current site
         run: |
-          ssh "$H" "tar -czf ~/deploy/backups/site_\$(date +%F_%H%M).tar.gz -C $DOCROOT . && ls -1t ~/deploy/backups | head -1"
+          ssh "$H" "mkdir -p ~/deploy/backups && tar -czf ~/deploy/backups/site_\$(date +%F_%H%M).tar.gz -C $DOCROOT . && ls -1t ~/deploy/backups | head -1"
 
       - name: Activate release into document root
         run: |
