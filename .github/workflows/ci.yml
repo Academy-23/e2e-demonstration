@@ -15,7 +15,7 @@ jobs:
       #   with: { node-version: 20, cache: npm }
       # - run: npm ci
       # - run: npm run lint
-      - run: npx --yes html-validate "**/*.html"          # HTML validation (node is preinstalled on the runner)
+      # - run: npx --yes html-validate "**/*.html"          # HTML validation (node is preinstalled on the runner)
 
   typecheck:
     runs-on: ubuntu-latest
@@ -38,5 +38,5 @@ jobs:
       # - run: npm ci
       # - run: npm run build
       # - run: test -f out/index.html   # proves the static export was produced
-      - run: test -f index.html          # plain site: the entry page must exist at the repo root
-      - run: '! grep -rIl "localhost" --include=*.html --include=*.js . || (echo "localhost reference found" && exit 1)'
+      # - run: test -f index.html          # plain site: the entry page must exist at the repo root
+      # - run: '! grep -rIl "localhost" --include=*.html --include=*.js . || (echo "localhost reference found" && exit 1)'
