@@ -66,14 +66,39 @@ jobs:
           ssh "$H" "mkdir -p ~/deploy/backups && tar -czf ~/deploy/backups/site_\$(date +%F_%H%M).tar.gz -C $DOCROOT . && ls -1t ~/deploy/backups | head -1"
 
       - name: Activate release into document root
+        # Copies the new release into the docroot and records which release is
+        # live (~/deploy/current) and which one it replaced (~/deploy/previous).
         run: |
-          ssh "$H" "rsync -a --delete --exclude='.htaccess' --exclude='.well-known/' ~/deploy/releases/$V/ $DOCROOT/"
+          ssh "$H" "bash -s -- '$V' '$DOCROOT'" <<'EOF'
+          set -euo pipefail
+          V="$1"; DOCROOT="$2"; D="$HOME/deploy"
+          NEW="$D/releases/$V"
+          test -f "$NEW/index.html"
+          if [ -L "$D/current" ]; then
+            OLD="$(readlink -f "$D/current")"
+          else
+            # first run with pointers: the newest other release was the live one
+            OLD="$(ls -1dt "$D"/releases/*/ | sed 's:/*$::' | grep -vxF "$NEW" | head -1 || true)"
+          fi
+          rsync -a --checksum --delete --exclude='.htaccess' --exclude='.well-known/' "$NEW/" "$DOCROOT/"
+          if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then ln -sfn "$OLD" "$D/previous"; fi
+          ln -sfn "$NEW" "$D/current"
+          echo "current : $(basename "$(readlink -f "$D/current")")"
+          if [ -L "$D/previous" ]; then echo "previous: $(basename "$(readlink -f "$D/previous")")"; else echo "previous: none"; fi
+          EOF
 
       - name: Verify
         run: |
           curl -fsS "${{ vars.SITE_URL }}/version.json" | grep -q "$GITHUB_SHA"
           curl -fsS -o /dev/null -w "%{http_code}\n" "${{ vars.SITE_URL }}/"
 
-      - name: Prune old releases and backups (keep 5)
+      - name: Prune old releases and backups (keep 5, never current/previous)
         run: |
-          ssh "$H" "ls -1dt ~/deploy/releases/* | tail -n +6 | xargs -r rm -rf; ls -1t ~/deploy/backups/*.tar.gz | tail -n +6 | xargs -r rm -f"
+          ssh "$H" bash -s <<'EOF'
+          set -euo pipefail
+          D="$HOME/deploy"
+          keep="$(readlink -f "$D/current" 2>/dev/null || true; readlink -f "$D/previous" 2>/dev/null || true)"
+          ls -1dt "$D"/releases/*/ | sed 's:/*$::' | tail -n +6 | { grep -vxF "$keep" || true; } | xargs -r rm -rf
+          ls -1t "$D"/backups/*.tar.gz 2>/dev/null | tail -n +6 | xargs -r rm -f || true
+          echo "releases kept:"; ls -1t "$D/releases"
+          EOF
