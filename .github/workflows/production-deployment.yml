@@ -118,3 +118,27 @@ jobs:
             --data-urlencode "status=$S" \
             --data-urlencode "msg=deploy ${GITHUB_SHA::7} $STATUS (run $GITHUB_RUN_ID)" \
             -o /dev/null && echo "reported: $S" || echo "::warning::could not reach Uptime Kuma"
+
+      - name: Notify Telegram
+        # Message on every deploy (success or failure). Skipped if the secrets
+        # are not set; never fails the deploy if Telegram is unreachable.
+        if: always()
+        env:
+          TG_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TG_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          STATUS: ${{ job.status }}
+          SITE: ${{ vars.SITE_URL }}
+        run: |
+          [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ] || { echo "Telegram secrets not set - skipping"; exit 0; }
+          if [ "$STATUS" = "success" ]; then ICON="✅"; WHAT="Deployed to production"; else ICON="❌"; WHAT="Production deploy FAILED ($STATUS)"; fi
+          SUBJECT="$(git log -1 --format=%s 2>/dev/null || true)"
+          TEXT="$ICON $WHAT
+          Commit: ${GITHUB_SHA::7} ${SUBJECT}
+          By: ${GITHUB_ACTOR}
+          Site: ${SITE}
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -fsS -m 10 -o /dev/null "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TG_CHAT}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "disable_web_page_preview=true" \
+            && echo "telegram: sent" || echo "::warning::could not send Telegram message"
