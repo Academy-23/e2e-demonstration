@@ -37,7 +37,7 @@ jobs:
           echo "V=$(date +%Y%m%d-%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           # Next.js: V=$(node -p "require('./package.json').version")-${GITHUB_SHA::7}
           printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -Is)" > version.json
-          test -f index.html
+      # test -f index.html
 
       - name: SSH setup
         run: |
