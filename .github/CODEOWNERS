@@ -1,3 +1,10 @@
 # Default reviewer for the entire project
 
 * @smrefat02
+
+# Deployment automation – must be reviewed by the release owner
+/.github/workflows/   @mzr-io
+/deploy/              @mzr-io
+
+# Next.js build configuration
+/next.config.*        @mzr-io
