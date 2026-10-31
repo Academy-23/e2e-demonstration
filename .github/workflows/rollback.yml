@@ -1,0 +1,57 @@
+name: production-rollback
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release folder to restore (e.g. 20261031-2113-d18567f). Leave empty for the previous release."
+        required: false
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: production-deploy          # same group as deploy: never runs at the same time
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    env:
+      H: mentoracademy23p@${{ secrets.DEPLOY_HOST }}
+      DOCROOT: /var/www/clients/client8/web30/web/laragenie/public
+      RELEASE: ${{ inputs.release }}
+    steps:
+      - name: SSH setup
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Restore release into document root
+        run: |
+          [[ "$RELEASE" =~ ^[0-9A-Za-z-]*$ ]] || { echo "invalid release name: $RELEASE"; exit 1; }
+          SHA=$(ssh "$H" "bash -s -- '$RELEASE' '$DOCROOT'" <<'EOF'
+          set -euo pipefail
+          REL="$1"; DOCROOT="$2"; D="$HOME/deploy"
+          if [ -n "$REL" ]; then TARGET="$D/releases/$REL"
+          elif [ -L "$D/previous" ]; then TARGET="$(readlink -f "$D/previous")"
+          else echo "no previous release recorded" >&2; exit 1; fi
+          test -f "$TARGET/index.html" || { echo "release not found: $TARGET" >&2; exit 1; }
+          CUR="$(readlink -f "$D/current" 2>/dev/null || true)"
+          rsync -a --checksum --delete --exclude='.htaccess' --exclude='.well-known/' "$TARGET/" "$DOCROOT/"
+          ln -sfn "$TARGET" "$D/current"
+          if [ -n "$CUR" ] && [ "$CUR" != "$TARGET" ]; then ln -sfn "$CUR" "$D/previous"; fi
+          echo "current : $(basename "$TARGET")" >&2
+          echo "previous: $(basename "$(readlink -f "$D/previous")")" >&2
+          sed -E 's/.*"sha":"([0-9a-f]+)".*/\1/' "$TARGET/version.json"
+          EOF
+          )
+          echo "SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Verify
+        run: |
+          curl -fsS "${{ vars.SITE_URL }}/version.json" | grep -q "$SHA"
+          curl -fsS -o /dev/null -w "%{http_code}\n" "${{ vars.SITE_URL }}/"
