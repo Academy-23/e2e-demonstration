@@ -32,12 +32,22 @@ jobs:
       #     npm run build                      # next.config: output: 'export' → out/
       #     test -f out/index.html
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Build TypeScript
+        run: |
+          npm ci
+          npm run build                        # src/*.ts -> js/*.js
+          test -f js/redirect.js
+
       - name: Version stamp
         run: |
           echo "V=$(date +%Y%m%d-%H%M)-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           # Next.js: V=$(node -p "require('./package.json').version")-${GITHUB_SHA::7}
           printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -Is)" > version.json
-      # test -f index.html
+          test -f index.html
 
       - name: SSH setup
         run: |
@@ -49,7 +59,7 @@ jobs:
       - name: Upload to a new release directory
         run: |
           ssh "$H" "mkdir -p ~/deploy/releases/$V"
-          rsync -az --delete --exclude='.git' --exclude='.github' --exclude='README.md' "$SRC" "$H:deploy/releases/$V/"
+          rsync -az --delete --exclude='.git' --exclude='.github' --exclude='README.md' --exclude='node_modules' --exclude='src' --exclude='package.json' --exclude='package-lock.json' --exclude='tsconfig.json' --exclude='.gitignore' "$SRC" "$H:deploy/releases/$V/"
 
       - name: Backup current site
         run: |

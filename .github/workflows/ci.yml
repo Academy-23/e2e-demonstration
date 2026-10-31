@@ -21,22 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # --- TypeScript only. Re-enable when the project has tsconfig.json. ---
-      # - uses: actions/setup-node@v4
-      #   with: { node-version: 20, cache: npm }
-      # - run: npm ci
-      # - run: npx tsc --noEmit
-      - run: echo "No TypeScript in this project - typecheck skipped"
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # --- Next.js build. Re-enable when the project has package.json and next.config.* ---
-      # - uses: actions/setup-node@v4
-      #   with: { node-version: 20, cache: npm }
-      # - run: npm ci
-      # - run: npm run build
-      # - run: test -f out/index.html   # proves the static export was produced
-      # - run: test -f index.html          # plain site: the entry page must exist at the repo root
-      # - run: '! grep -rIl "localhost" --include=*.html --include=*.js . || (echo "localhost reference found" && exit 1)'
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: test -f index.html          # plain site: the entry page must exist at the repo root
+      - run: test -f js/redirect.js      # proves the TypeScript redirect was compiled
