@@ -1,0 +1,66 @@
+name: production-deployment
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.SITE_URL }}
+    env:
+      H: mentoracademy23p@${{ secrets.DEPLOY_HOST }}
+      DOCROOT: ~/laragenie/public
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build static export
+        run: |
+          npm ci
+          npm run build                      # next.config: output: 'export' → out/
+          test -f out/index.html
+
+      - name: Version stamp
+        run: |
+          echo "V=$(node -p "require('./package.json').version")-${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -Is)" > out/version.json
+
+      - name: SSH setup
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Upload to a new release directory
+        run: |
+          ssh "$H" "mkdir -p ~/deploy/releases/$V"
+          rsync -az --delete out/ "$H:deploy/releases/$V/"
+
+      - name: Backup current site
+        run: |
+          ssh "$H" "tar -czf ~/deploy/backups/site_\$(date +%F_%H%M).tar.gz -C $DOCROOT . && ls -1t ~/deploy/backups | head -1"
+
+      - name: Activate release into document root
+        run: |
+          ssh "$H" "rsync -a --delete --exclude='.htaccess' --exclude='.well-known/' ~/deploy/releases/$V/ $DOCROOT/"
+
+      - name: Verify
+        run: |
+          curl -fsS "${{ vars.SITE_URL }}/version.json" | grep -q "$GITHUB_SHA"
+          curl -fsS -o /dev/null -w "%{http_code}\n" "${{ vars.SITE_URL }}/"
+
+      - name: Prune old releases and backups (keep 5)
+        run: |
+          ssh "$H" "ls -1dt ~/deploy/releases/* | tail -n +6 | xargs -r rm -rf; ls -1t ~/deploy/backups/*.tar.gz | tail -n +6 | xargs -r rm -f"
